@@ -193,7 +193,6 @@
     (is (= :val (:key echo)))
     (is (not (:request-method echo)))))
 
-
 (deftest apply-on-url
   (let [u-client (client/wrap-url identity)
         resp (u-client {:url "http://google.com:8080/foo?bar=bat"})]
@@ -213,3 +212,25 @@
   (is (= 8080 (-> "http://example.com:8080/" client/parse-url :server-port)))
   (is (= 443  (-> "https://example.com/" client/parse-url :server-port)))
   (is (= 8443 (-> "https://example.com:8443/" client/parse-url :server-port))))
+
+(deftest apply-on-compressed
+  (let [client (fn [req] {:body (util/gzip (util/utf8-bytes "foofoofoo"))
+                          :headers {"Content-Encoding" "gzip"}})
+        c-client (client/wrap-decompression client)
+        resp (c-client {})]
+    (is (= "foofoofoo" (util/utf8-string (:body resp))))))
+
+(deftest apply-on-form-params
+  (testing "With form params"
+    (let [param-client (client/wrap-form-params identity)
+          resp (param-client {:form-params {:param1 "value1"
+                                            :param2 "value2"}})]
+      (is (= "param1=value1&param2=value2" (:body resp)))
+      (is (= "application/x-www-form-urlencoded" (:content-type resp)))
+      (is (not (contains? resp :form-params)))))
+  
+  (testing "with no form params"
+    (let [param-client (client/wrap-form-params identity)
+          resp (param-client {:body "untouched"})]
+      (is (= "untouched" (:body resp)))
+      (is (not (contains? resp :content-type))))))
